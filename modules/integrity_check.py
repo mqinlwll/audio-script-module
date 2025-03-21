@@ -6,24 +6,32 @@ from tqdm import tqdm
 import datetime
 from pathlib import Path
 import sqlite3
-import hashlib  # Using hashlib for MD5
+import hashlib
 import threading
 import utils  # Import from root directory
+from colorama import Fore, Style, init
+
+# Initialize colorama for colored output
+init(autoreset=True)
+
+def print_logo():
+    """Print ASCII logo for the Check module."""
+    logo = f"""
+{Fore.YELLOW}    ╔════════════════════╗
+    ║    CHECK MODULE    ║
+    ║ Audio Integrity    ║
+    ║     Verifier       ║
+    ╚════════════════════╝{Style.RESET_ALL}
+    """
+    print(logo)
 
 def calculate_file_hash(file_path: str) -> str:
-    """Calculate the MD5 hash of a file.
-
-    Args:
-        file_path (str): Path to the file.
-
-    Returns:
-        str: MD5 hash as a hexadecimal string.
-    """
-    hasher = hashlib.md5()  # Initialize MD5 hash object
-    with open(file_path, 'rb') as f:  # Open file in binary read mode
-        while chunk := f.read(8192):  # Read file in 8KB chunks
-            hasher.update(chunk)  # Update hash with each chunk
-    return hasher.hexdigest()  # Return the final hash as a hex string
+    """Calculate the MD5 hash of a file."""
+    hasher = hashlib.md5()
+    with open(file_path, 'rb') as f:
+        while chunk := f.read(8192):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 def initialize_database(db_path: Path):
     """Initialize the SQLite database with tables for passed and failed files, including mtime."""
@@ -33,7 +41,7 @@ def initialize_database(db_path: Path):
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS passed_files (
                 file_path TEXT PRIMARY KEY,
-                file_hash TEXT,  -- Now stores MD5 hash
+                file_hash TEXT,
                 mtime REAL,
                 status TEXT,
                 last_checked TEXT
@@ -42,16 +50,16 @@ def initialize_database(db_path: Path):
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS failed_files (
                 file_path TEXT PRIMARY KEY,
-                file_hash TEXT,  -- Now stores MD5 hash
+                file_hash TEXT,
                 mtime REAL,
                 status TEXT,
                 last_checked TEXT
             )
         ''')
         conn.commit()
-        print(f"Database successfully initialized at: {db_path}")
+        print(f"{Fore.GREEN}Database successfully initialized at: {db_path}{Style.RESET_ALL}")
     except sqlite3.OperationalError as e:
-        print(f"Error initializing database at '{db_path}': {e}")
+        print(f"{Fore.RED}Error initializing database at '{db_path}': {e}{Style.RESET_ALL}")
         raise
     finally:
         conn.close()
@@ -61,7 +69,7 @@ def determine_action(db_path: Path, file_path: str, force_recheck: bool = False)
     if force_recheck:
         try:
             current_mtime = os.path.getmtime(file_path)
-            current_hash = calculate_file_hash(file_path)  # Use MD5
+            current_hash = calculate_file_hash(file_path)
             return 'RUN_FFMPEG', None, current_hash, current_mtime
         except FileNotFoundError:
             return 'FILE_NOT_FOUND', None, None, None
@@ -82,7 +90,7 @@ def determine_action(db_path: Path, file_path: str, force_recheck: bool = False)
                 conn.close()
                 return 'USE_CACHED', stored_status, None, current_mtime
             else:
-                current_hash = calculate_file_hash(file_path)  # Use MD5
+                current_hash = calculate_file_hash(file_path)
                 if stored_hash == current_hash:
                     conn.close()
                     return 'UPDATE_MTIME', stored_status, current_hash, current_mtime
@@ -90,7 +98,7 @@ def determine_action(db_path: Path, file_path: str, force_recheck: bool = False)
                     conn.close()
                     return 'RUN_FFMPEG', None, current_hash, current_mtime
     conn.close()
-    current_hash = calculate_file_hash(file_path)  # Use MD5
+    current_hash = calculate_file_hash(file_path)
     return 'RUN_FFMPEG', None, current_hash, current_mtime
 
 def check_single_file(file_path: str) -> tuple:
@@ -135,9 +143,10 @@ def cleanup_database(db_path: Path):
 def check_integrity(args):
     """Handle the 'check' command to verify audio file integrity with optimized caching."""
     if not utils.is_ffmpeg_installed():
-        print("Error: FFmpeg is not installed or not in your PATH.")
+        print(f"{Fore.RED}Error: FFmpeg is not installed or not in your PATH.{Style.RESET_ALL}")
         return
 
+    print_logo()
     path = args.path
     verbose = getattr(args, 'verbose', False)
     summary = getattr(args, 'summary', False)
@@ -154,8 +163,8 @@ def check_integrity(args):
     log_folder = Path(config.get("log_folder", "Logs"))
     log_folder.mkdir(parents=True, exist_ok=True)
 
-    print(f"Current working directory: {os.getcwd()}")
-    print(f"Attempting to initialize database at: {db_path}")
+    print(f"{Fore.CYAN}Current working directory: {os.getcwd()}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}Attempting to initialize database at: {db_path}{Style.RESET_ALL}")
 
     initialize_database(db_path)
 
@@ -164,10 +173,10 @@ def check_integrity(args):
     elif os.path.isdir(path):
         audio_files = utils.get_audio_files(path)
         if not audio_files:
-            print(f"No audio files found in '{path}'.")
+            print(f"{Fore.YELLOW}No audio files found in '{path}'.{Style.RESET_ALL}")
             return
     else:
-        print(f"'{path}' is not a file or directory.")
+        print(f"{Fore.RED}'{path}' is not a file or directory.{Style.RESET_ALL}")
         return
 
     create_log = save_log or (not verbose and not summary)
@@ -184,13 +193,13 @@ def check_integrity(args):
     total_files = len(audio_files)
 
     if verbose:
-        # Sequential processing with immediate database updates (unchanged)
         all_results = []
         for file_path in audio_files:
             action, status, message, _, extra = process_file(db_path, file_path, force_recheck)
             if action in ['USE_CACHED', 'UPDATE_MTIME', 'RUN_FFMPEG']:
                 all_results.append((status, message, file_path))
-                result_line = f"{status} {file_path}" + (f": {message}" if message else "")
+                color = Fore.GREEN if status == "PASSED" else Fore.RED
+                result_line = f"{color}{status} {file_path}{Style.RESET_ALL}" + (f": {message}" if message else "")
                 print(result_line)
                 if create_log:
                     (success_log_file if status == "PASSED" else failed_log_file).write(result_line + "\n")
@@ -221,7 +230,6 @@ def check_integrity(args):
                 conn.commit()
                 conn.close()
     else:
-        # Concurrent processing with batch updates every 100 files
         all_results = []
         mtime_updates_passed = []
         mtime_updates_failed = []
@@ -255,7 +263,6 @@ def check_integrity(args):
                     pbar.update(1)
                     processed_count += 1
 
-                    # Update database every 100 files
                     if processed_count % 100 == 0:
                         conn = sqlite3.connect(db_path)
                         cursor = conn.cursor()
@@ -288,7 +295,6 @@ def check_integrity(args):
                         conn.commit()
                         conn.close()
 
-        # Final update for any remaining items
         if mtime_updates_passed or mtime_updates_failed or db_updates_passed or db_updates_failed:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
@@ -327,7 +333,7 @@ def check_integrity(args):
             result_line = f"{status} {file_path}" + (f": {message}" if message else "")
             (success_log_file if status == "PASSED" else failed_log_file).write(result_line + "\n")
 
-    summary_text = f"\nSummary:\nTotal files: {total_files}\nPassed: {passed_count}\nFailed: {failed_count}\n"
+    summary_text = f"\n{Fore.CYAN}Summary:{Style.RESET_ALL}\nTotal files: {total_files}\nPassed: {passed_count}\nFailed: {failed_count}\n"
     if verbose or summary:
         print(summary_text)
     if create_log:
@@ -335,18 +341,18 @@ def check_integrity(args):
         success_log_file.write(summary_text)
         failed_log_file.close()
         success_log_file.close()
-        print(f"Check complete. Logs saved to '{failed_log_filename}' and '{success_log_filename}'")
+        print(f"{Fore.GREEN}Check complete. Logs saved to '{failed_log_filename}' and '{success_log_filename}'{Style.RESET_ALL}")
     else:
-        print("Check complete.")
+        print(f"{Fore.GREEN}Check complete.{Style.RESET_ALL}")
 
 def register_command(subparsers):
     """Register the 'check' command with the subparsers."""
-    check_parser = subparsers.add_parser("check", help="Verify audio file integrity")
-    check_parser.add_argument("path", type=utils.path_type, help="File or directory to check")
+    check_parser = subparsers.add_parser("check", help="Verify the integrity of audio files")
+    check_parser.add_argument("path", type=utils.path_type, help="Path to an audio file or directory")
     output_group = check_parser.add_mutually_exclusive_group()
-    output_group.add_argument("--verbose", action="store_true", help="Print detailed results (sequential)")
-    output_group.add_argument("--summary", action="store_true", help="Show progress and summary only")
+    output_group.add_argument("--verbose", action="store_true", help="Print detailed results (sequential mode)")
+    output_group.add_argument("--summary", action="store_true", help="Show progress bar and summary only")
     check_parser.add_argument("--save-log", action="store_true", help="Save results to log files")
-    check_parser.add_argument("--recheck", action="store_true", help="Force recheck of all files, overwriting cached results")
+    check_parser.add_argument("--recheck", action="store_true", help="Force recheck of all files, ignoring cache")
     check_parser.add_argument("--use-threading", action="store_true", help="Unused; retained for compatibility")
     check_parser.set_defaults(func=check_integrity)

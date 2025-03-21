@@ -4,10 +4,7 @@ import json
 from pathlib import Path
 import argparse
 
-# Supported audio file extensions
 AUDIO_EXTENSIONS = ['.flac', '.wav', '.m4a', '.mp3', '.ogg', '.opus', '.ape', '.wv', '.wma']
-
-# Configuration file path
 CONFIG_FILE = Path("audio-script-config.json")
 
 def load_config():

@@ -6,6 +6,21 @@ from mutagen.mp4 import MP4
 from tqdm import tqdm
 import concurrent.futures
 import utils  # Import from root directory
+from colorama import Fore, Style, init
+
+# Initialize colorama for colored output
+init(autoreset=True)
+
+def print_logo():
+    """Print ASCII logo for the Count module."""
+    logo = f"""
+{Fore.GREEN}    ╔════════════════════╗
+    ║    COUNT MODULE    ║
+    ║ Albums, Songs, &   ║
+    ║     Sizes Tool     ║
+    ╚════════════════════╝{Style.RESET_ALL}
+    """
+    print(logo)
 
 def get_codec(file_path: str) -> str:
     """Determine the codec of an audio file using ffprobe."""
@@ -19,7 +34,7 @@ def get_codec(file_path: str) -> str:
         codec_name = result.stdout.strip()
         return codec_name if codec_name else "Unknown"
     except Exception as e:
-        print(f"Error determining codec for {file_path}: {e}", file=sys.stderr)
+        print(f"{Fore.RED}Error determining codec for {file_path}: {e}{Style.RESET_ALL}", file=sys.stderr)
         return "Unknown"
 
 def get_album_metadata(file_path: str) -> tuple:
@@ -34,7 +49,7 @@ def get_album_metadata(file_path: str) -> tuple:
         codec = get_codec(file_path) if isinstance(audio, MP4) else type(audio).__name__
         return album, artist, codec
     except Exception as e:
-        print(f"Error reading metadata from {file_path}: {e}", file=sys.stderr)
+        print(f"{Fore.RED}Error reading metadata from {file_path}: {e}{Style.RESET_ALL}", file=sys.stderr)
         return None, None, None
 
 def count_albums(directories: list, num_workers: int) -> None:
@@ -52,11 +67,12 @@ def count_albums(directories: list, num_workers: int) -> None:
                 album_dict.setdefault(codec, set()).add((artist, album))
 
     total_albums = 0
+    print(f"{Fore.CYAN}Album Counts by Codec:{Style.RESET_ALL}")
     for codec, albums in album_dict.items():
         count = len(albums)
         total_albums += count
         print(f"{codec}: {count} Albums")
-    print(f"Total: {total_albums} Albums")
+    print(f"{Fore.GREEN}Total: {total_albums} Albums{Style.RESET_ALL}")
 
 def count_songs(directories: list, num_workers: int) -> None:
     """Count individual songs per codec across the provided directories."""
@@ -73,9 +89,10 @@ def count_songs(directories: list, num_workers: int) -> None:
                 song_dict[codec] = song_dict.get(codec, 0) + 1
 
     total_songs = sum(song_dict.values())
+    print(f"{Fore.CYAN}Song Counts by Codec:{Style.RESET_ALL}")
     for codec, count in song_dict.items():
         print(f"{codec}: {count} Songs")
-    print(f"Total: {total_songs} Songs")
+    print(f"{Fore.GREEN}Total: {total_songs} Songs{Style.RESET_ALL}")
 
 def calculate_size(directories: list, num_workers: int) -> None:
     """Calculate the total size of audio files per codec across the provided directories."""
@@ -94,6 +111,7 @@ def calculate_size(directories: list, num_workers: int) -> None:
                 size_dict[codec] = size_dict.get(codec, 0) + file_size
 
     total_size = sum(size_dict.values())
+    print(f"{Fore.CYAN}Size by Codec:{Style.RESET_ALL}")
     for codec, size in size_dict.items():
         size_mb = size / (1024 * 1024)
         if size_mb > 1024:
@@ -102,16 +120,17 @@ def calculate_size(directories: list, num_workers: int) -> None:
             print(f"{codec}: {size_mb:.2f} MB")
     total_size_mb = total_size / (1024 * 1024)
     if total_size_mb > 1024:
-        print(f"Total: {total_size_mb / 1024:.2f} GB")
+        print(f"{Fore.GREEN}Total: {total_size_mb / 1024:.2f} GB{Style.RESET_ALL}")
     else:
-        print(f"Total: {total_size_mb:.2f} MB")
+        print(f"{Fore.GREEN}Total: {total_size_mb:.2f} MB{Style.RESET_ALL}")
 
 def count_command(args):
     """Handle the 'count' command to count albums, songs, or calculate sizes."""
     if not utils.is_ffprobe_installed():
-        print("Error: ffprobe is not installed or not in your PATH.")
+        print(f"{Fore.RED}Error: ffprobe is not installed or not in your PATH.{Style.RESET_ALL}")
         return
 
+    print_logo()
     directories = args.directories
     num_workers = args.workers if args.workers is not None else (os.cpu_count() or 4)
 
@@ -122,11 +141,11 @@ def count_command(args):
     elif args.option == "size":
         calculate_size(directories, num_workers)
     else:
-        print("Invalid option. Use 'album', 'song', or 'size'.")
+        print(f"{Fore.RED}Invalid option. Use 'album', 'song', or 'size'.{Style.RESET_ALL}")
 
 def register_command(subparsers):
     """Register the 'count' command with the CLI subparsers."""
-    count_parser = subparsers.add_parser("count", help="Count albums, songs, or calculate sizes based on metadata")
-    count_parser.add_argument("option", choices=["album", "song", "size"], help="Choose what to count: albums, songs, or sizes")
-    count_parser.add_argument("directories", nargs='+', type=utils.directory_path, help="One or more directories to process")
+    count_parser = subparsers.add_parser("count", help="Count albums, songs, or calculate sizes of audio files")
+    count_parser.add_argument("option", choices=["album", "song", "size"], help="Specify what to count: albums, songs, or sizes")
+    count_parser.add_argument("directories", nargs='+', type=utils.directory_path, help="Directories to process")
     count_parser.set_defaults(func=count_command)

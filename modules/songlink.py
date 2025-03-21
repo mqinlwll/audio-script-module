@@ -6,6 +6,17 @@ import utils  # Assuming a utils module exists in the project root
 # Initialize colorama for colored output
 init(autoreset=True)
 
+def print_logo():
+    """Print ASCII logo for the Songlink module."""
+    logo = f"""
+{Fore.RED}    ╔════════════════════╗
+    ║   SONGLINK MODULE  ║
+    ║ Fetch Song Links   ║
+    ║   from Odesli API  ║
+    ╚════════════════════╝{Style.RESET_ALL}
+    """
+    print(logo)
+
 def normalize_service_names(links):
     """Normalize service names to lowercase with underscores."""
     return {service.lower().replace(" ", "_"): info for service, info in links.items()}
@@ -27,7 +38,7 @@ def fetch_links(url, country=None, song_if_single=False):
             return None
         return normalize_service_names(data['linksByPlatform'])
     except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
-        print(f"{Fore.RED}Error fetching links for {url}: {str(e)}")
+        print(f"{Fore.RED}Error fetching links for {url}: {str(e)}{Style.RESET_ALL}")
         return None
 
 def print_links(url, links, selected_services=None):
@@ -76,6 +87,7 @@ def normalize_service_name(service):
 
 def songlink_command(args):
     """Handle the 'songlink' command to fetch and display song links."""
+    print_logo()
     selected_services = {s.strip().lower().replace(' ', '_') for s in args.select} if args.select else None
     output_file = open(args.output, 'w') if args.output else None
 
@@ -90,7 +102,7 @@ def songlink_command(args):
         for url in urls:
             links = fetch_links(url, args.country, args.songIfSingle)
             if not links:
-                print(f"{Fore.YELLOW}No links found for {url}")
+                print(f"{Fore.YELLOW}No links found for {url}{Style.RESET_ALL}")
                 continue
 
             filtered_links = print_links(url, links, selected_services)
@@ -105,13 +117,12 @@ def songlink_command(args):
 
 def register_command(subparsers):
     """Register the 'songlink' command with the CLI subparsers."""
-    songlink_parser = subparsers.add_parser("songlink", help="Fetch song links from Odesli API")
+    songlink_parser = subparsers.add_parser("songlink", help="Fetch song links from the Odesli API")
     group = songlink_parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--url', type=str, help="Single song URL")
-    group.add_argument('--file', type=str, help="Text file containing URLs")
-
-    songlink_parser.add_argument('--country', type=str, help="User country code")
+    group.add_argument('--url', type=str, help="Single song URL to fetch links for")
+    group.add_argument('--file', type=str, help="Text file containing URLs (one per line)")
+    songlink_parser.add_argument('--country', type=str, help="User country code (e.g., 'US')")
     songlink_parser.add_argument('--songIfSingle', action='store_true', help="Treat singles as songs")
-    songlink_parser.add_argument('--select', '-s', nargs='+', help="Services to save (e.g., tidal)")
-    songlink_parser.add_argument('--output', '-o', type=str, help="Output file to save links")
+    songlink_parser.add_argument('--select', '-s', nargs='+', help="Specific services to display/save (e.g., 'tidal spotify')")
+    songlink_parser.add_argument('--output', '-o', type=str, help="File to save links to")
     songlink_parser.set_defaults(func=songlink_command)
