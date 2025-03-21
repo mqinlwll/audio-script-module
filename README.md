@@ -49,8 +49,8 @@ To use the Audio Tool, you need to install several dependencies and ensure the s
 1. **Clone or Download the Project**
    - If hosted on a repository (e.g., GitHub), clone it:
      ```bash
-     git clone <repository-url>
-     cd <project-directory>
+     git clone https://github.com/mqinlwll/audio-script-module audio-script-module
+     cd audio-script-module
      ```
    - Otherwise, extract the provided directory structure:
      ```
